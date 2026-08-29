@@ -1,0 +1,9 @@
+# The classifier is mounted as a volume (see docker-compose.yml), not baked
+# into the image: 207 MB in every layer makes rebuilds painfully slow.
+models/
+static/outputs/
+static/uploads/
+temp_shapefile_extract/
+output/
+__pycache__/
+*.pyc

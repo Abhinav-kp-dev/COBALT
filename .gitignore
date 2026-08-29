@@ -1,0 +1,38 @@
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+.env
+venv/
+myenv/
+.venv/
+
+# --- Secrets / credentials ---
+# Earth Engine service account key. Never commit.
+gee-key.json
+backend/gee-key.json
+*credentials*.json
+
+# --- Trained models ---
+# rf_model_v3.pkl is ~208 MB, over GitHub's 100 MB hard limit.
+# Mounted as a volume at runtime (see docker-compose.yml).
+backend/models/*.pkl
+*.pkl
+
+# --- Generated artifacts ---
+backend/static/outputs/
+backend/static/uploads/
+backend/output/
+output/
+temp_shapefile_extract/
+
+# --- Frontend ---
+node_modules/
+dist/
+*.local
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,30 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Tungabhadra Reservoir (open water)",
+        "landcover": "water",
+        "expected": "CLEAN",
+        "note": "Placed on JRC permanent water (occurrence > 90%). True negative control."
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [76.2800, 15.2350],
+          [76.2960, 15.2320],
+          [76.3120, 15.2340],
+          [76.3260, 15.2420],
+          [76.3330, 15.2550],
+          [76.3310, 15.2670],
+          [76.3190, 15.2730],
+          [76.3020, 15.2740],
+          [76.2870, 15.2680],
+          [76.2780, 15.2540],
+          [76.2800, 15.2350]
+        ]]
+      }
+    }
+  ]
+}

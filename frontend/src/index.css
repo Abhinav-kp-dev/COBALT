@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+/* Custom High-End Dark Theme */
+@theme {
+  --color-background: #0f172a;
+  --color-text: #e2e8f0;
+}
+
+/* Apply Custom Styles */
+body {
+  background-color: var(--color-background);
+  color: var(--color-text);
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #1e293b; 
+}
+::-webkit-scrollbar-thumb {
+  background: #475569; 
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #64748b; 
+}

@@ -1,0 +1,61 @@
+
+services:
+  # 1. THE DATABASE
+  db:
+    image: postgis/postgis
+    container_name: mineguard-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=mining_secret
+      - POSTGRES_DB=mineguard
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
+  # 2. THE BACKEND API
+  backend:
+    build: ./backend
+    container_name: mineguard-api
+    ports:
+      - "8001:8000"
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgresql://postgres:mining_secret@db:5432/mineguard
+      - GOOGLE_CLOUD_PROJECT=mine-guard-506610
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/gee-key.json
+
+      # --- DETECTION TUNING ---
+      # Demo defaults. MG_DETECTOR is only the fallback: the UI sends a
+      # per-request detector, so it can be switched without a restart.
+      - MG_DETECTOR=ml
+      - MG_ML_THRESHOLD=0.99
+      # Must match the focal radius the classifier was trained with (250 m),
+      # or every depth value at inference is smaller than the model expects.
+      - MG_DEPTH_RADIUS=250
+      
+      # --- CRITICAL CONFIGURATION ---
+      # For Localhost (Development):
+      - API_PUBLIC_URL=http://localhost:8001
+      
+      # For AWS / Cloud (Production):
+      # - API_PUBLIC_URL=http://13.61.145.193:8000
+      
+    volumes:
+      - ./backend/static:/app/static
+      - ./backend/models:/app/models:ro
+      - ${HOME}/.config/earthengine:/root/.config/earthengine:ro
+
+  # 3. THE FRONTEND DASHBOARD
+  frontend:
+    build: ./frontend
+    container_name: mineguard-ui
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
