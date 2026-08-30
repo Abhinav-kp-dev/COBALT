@@ -24,7 +24,7 @@ services:
       - db
     environment:
       - DATABASE_URL=postgresql://postgres:mining_secret@db:5432/mineguard
-      - GOOGLE_CLOUD_PROJECT=mine-guard-506610
+      - GOOGLE_CLOUD_PROJECT=monarch-507004
       - GOOGLE_APPLICATION_CREDENTIALS=/app/gee-key.json
 
       # --- DETECTION TUNING ---

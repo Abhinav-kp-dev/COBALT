@@ -292,7 +292,7 @@ Dark theme with a `slate` color palette. Custom scrollbar styling. Glassmorphic 
 | `POSTGRES_PASSWORD` | db | `mining_secret` | Database password |
 | `POSTGRES_DB` | db | `mineguard` | Database name |
 | `DATABASE_URL` | backend | `postgresql://postgres:mining_secret@db:5432/mineguard` | SQLAlchemy connection string |
-| `GOOGLE_CLOUD_PROJECT` | backend | `mine-guard-506610` | GCP project ID |
+| `GOOGLE_CLOUD_PROJECT` | backend | `monarch-507004` | GCP project ID |
 | `GOOGLE_APPLICATION_CREDENTIALS` | backend | `/app/gee-key.json` | Path to service account key |
 | `API_PUBLIC_URL` | backend | `http://localhost:8001` | Public URL for artifact links |
 

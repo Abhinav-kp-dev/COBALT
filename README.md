@@ -39,97 +39,30 @@ weighted; see `ml_detector.py` for the measured separation by threshold.
 -   **Intelligence**: Google Earth Engine (GEE), Geemap, NumPy.
 -   **DevOps**: Docker, Nginx, Docker-Compose.
 
-## 🚦 Getting Started
+## 🚦 Getting Started (Hackathon Rapid Deploy)
 
 ### 1. Requirements
+-   Docker Desktop installed.
+-   Earth Engine Service Account Key (`gee-key.json`) placed in `./backend/`.
 
-- Docker with Compose v2 (`docker compose`, not `docker-compose`)
-- A Google Earth Engine account — see [`GEE_SETUP.md`](GEE_SETUP.md)
-- `rf_model_v3.pkl` in `backend/models/` — **only for the ML detector**;
-  the threshold detector runs without it. See
-  [`backend/models/README.md`](backend/models/README.md).
-
-### 2. Authenticate Earth Engine
-
-Authenticate **on the host**. `docker-compose.yml` mounts the resulting
-credentials into the container read-only, so no key file goes in the repo:
-
+### 2. Magic Command
 ```bash
-pip install earthengine-api
-earthengine authenticate
+docker-compose up -d --build
 ```
 
-This writes `~/.config/earthengine/credentials`. Verify:
+### 3. Access
+-   **The Portal**: `http://localhost:3000`
+-   **The Engine (API)**: `http://localhost:8000/docs`
 
-```bash
-python3 -c "import ee; ee.Initialize(project='mine-guard-506610'); print(ee.Number(1).getInfo())"
-```
+## � Business Impact & Sustainability
+-   **Environmental Protection**: Real-time detection stops deforestation before it scales.
+-   **Revenue Recovery**: Enables governments to tax/fine unauthorized extraction based on precise volumetric data.
+-   **Scalability**: Global coverage with zero on-ground hardware required.
 
-A service-account key at `backend/gee-key.json` also works and takes
-precedence, but is not required and must never be committed.
+---
+| *Orbital Intelligence for Global Sustainability*
 
-### 3. Start
-
-```bash
-docker compose up -d --build
-```
-
-First build takes 15-30 minutes — the image pulls GDAL, geopandas, rasterio,
-scikit-learn and plotly. Later builds reuse the cached layers.
-
-### 4. Access
-
-| | URL |
-|---|---|
-| Dashboard | http://localhost:3000 |
-| API docs | http://localhost:8001/docs |
-| Database | `localhost:5433` (postgres/mining_secret) |
-
-Note the API is published on **8001**, not 8000.
-
-### 5. Verify
-
-Upload `jharia_mining.geojson` through the dashboard, or:
-
-```bash
-curl -X POST http://localhost:8001/api/analyze \
-  -F "file=@jharia_mining.geojson" \
-  -F "start_date=2024-01-01" -F "end_date=2024-04-30" \
-  -F "detector=ml"
-```
-
-Expect roughly 2.79 km² of illegal area. Then upload
-`control_reservoir.geojson` — it should come back near-clean, which is the
-check that matters. A run takes 2-5 minutes; most of it is Earth Engine.
-
-Pick the detector with the **Detector** selector above the RUN button; the
-result panel labels which one produced the numbers.
-
-### Troubleshooting
-
-**`failed to resolve source metadata` / `Temporary failure in name resolution`
-during build.** The Docker daemon cannot reach Docker Hub — on many Linux
-setups `registry-1.docker.io` returns IPv6-only records while the default
-bridge network is IPv4. Give the daemon explicit resolvers:
-
-```bash
-sudo tee /etc/docker/daemon.json <<'JSON'
-{ "dns": ["1.1.1.1", "8.8.8.8"] }
-JSON
-sudo systemctl restart docker
-```
-
-**`FileNotFoundError: ML model not found`.** Either drop the `.pkl` into
-`backend/models/`, or run the threshold detector — set `MG_DETECTOR=rule`, or
-choose Thresholds in the UI.
-
-**`InconsistentVersionWarning` on model load.** The pickle was written with
-scikit-learn 1.6.1. It loads and scores correctly; pin
-`scikit-learn==1.6.1` in `backend/requirements.txt` to silence it.
-
-**History sidebar empty.** Check `docker logs mineguard-api` — a 500 on
-`/api/history` usually means the database schema predates a model change.
-`docker compose down -v` recreates it, discarding past inspections.
+# Mineguard
 
 ## 🔧 Configuration
 
@@ -169,13 +102,3 @@ The `.pkl` is not in this repo (208 MB, over GitHub's limit) — see
   only. Area and volume are computed from the unfiltered raster.
 - Depth is derived from a static DEM, so it reflects terrain relief rather
   than change over the selected date window.
-
-## 💡 Business Impact & Sustainability
--   **Environmental Protection**: Real-time detection stops deforestation before it scales.
--   **Revenue Recovery**: Enables governments to tax/fine unauthorized extraction based on precise volumetric data.
--   **Scalability**: Global coverage with zero on-ground hardware required.
-
----
-| *Orbital Intelligence for Global Sustainability*
-
-# Mineguard

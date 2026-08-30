@@ -1,6 +1,6 @@
 # Google Earth Engine Setup Guide (MineGuard)
 
-This project needs Google Earth Engine access. The auth must be set up **once** before running `docker compose up -d --build`.
+This project needs Google Earth Engine access. The auth must be set up **once** before running `docker-compose up -d --build`.
 
 ## Prerequisites
 
@@ -15,7 +15,7 @@ This project needs Google Earth Engine access. The auth must be set up **once** 
 
 ## Step 2: Create / Use a Google Cloud Project
 
-1. The code expects a project: `mine-guard-506610`.
+1. The code expects a project: `monarch-507004`.
 2. If **you** created that project, you can use it directly.
 3. Else, either:
    - Ask the project owner to add you, or
@@ -67,7 +67,7 @@ docker-compose up -d --build
 |---------|-----|
 | `Earth Engine initialization failed` on startup | Make sure you completed **Step 1** (registration) and Step 3 auth |
 | `"Login failed"` / account not enabled | Earth Engine registration is still pending — wait for the email |
-| `project not found` | Your Google Cloud project doesn't exist or differs from `mine-guard-506610` — fix `PROJECT_ID` in `phase1_detection.py:15` |
+| `project not found` | Your Google Cloud project doesn't exist or differs from `monarch-507004` — fix `PROJECT_ID` in `phase1_detection.py:15` |
 | Service account `permission denied` | In Cloud Console, grant the service account the **Earth Engine Resource Admin** role |
 
 ## How Auth Works in This Code

@@ -3,16 +3,19 @@ import geemap
 import os
 from google.oauth2 import service_account
 
-# Import Helpers (Keep your existing error handling)
+# Import Helpers
 try:
     from phase2_tin_viz import generate_tin_visualization
-    from report_generator import generate_pdf_report
 except ImportError:
     generate_tin_visualization = None
+
+try:
+    from report_generator import generate_pdf_report
+except ImportError:
     generate_pdf_report = None
 
 # --- CONFIGURATION (Updated with Script 2 Values) ---
-PROJECT_ID = 'mine-guard-506610' # Keep your project ID
+PROJECT_ID = os.getenv('GOOGLE_CLOUD_PROJECT', 'monarch-507004')
 KEY_PATH = "gee-key.json"
 DEFAULT_START = '2024-01-01'
 DEFAULT_END = '2024-04-30'
@@ -277,6 +280,7 @@ def run_unified_detection(lease_geojson=None, filename="Manual_Input", output_di
     avg_depth_m = illegal_vol_m3 / illegal_area_m2 if illegal_area_m2 > 0 else 0.0
 
     # Get Lid Elevation (for 3D viz referencing)
+    lid_elevation = 0.0
     if legal_area_m2 > 0:
         lid_stats = smooth_surface.updateMask(legal_mining).reduceRegion(
             reducer=ee.Reducer.mean(), geometry=search_zone, scale=30, maxPixels=1e9
@@ -330,10 +334,19 @@ def run_unified_detection(lease_geojson=None, filename="Manual_Input", output_di
         generate_tin_from_arrays(
             ml_arrays["mask"], ml_arrays["depth"], ml_arrays["boundary"],
             ml_arrays["bounds"], output_path=tin_full_path,
-            elevation=ml_arrays.get("elevation")
+            elevation=ml_arrays.get("elevation"),
+            volume=total_vol_m3,
+            # The renderer derives the true peak depth from the surface itself;
+            # passing the average here mislabelled every model.
+            max_depth=None
         )
     elif total_area_m2 > 0 and generate_tin_visualization:
-        generate_tin_visualization(combined_image, search_zone, total_area_m2, output_path=tin_full_path)
+        generate_tin_visualization(
+            combined_image, search_zone, total_area_m2,
+            output_path=tin_full_path,
+            volume=total_vol_m3,
+            max_depth=None
+        )
 
     # 3. PDF Report
     pdf_filename = "report.pdf"

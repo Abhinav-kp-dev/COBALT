@@ -1,11 +1,11 @@
 # Use a lightweight Python image
-FROM python:3.10-slim
+FROM python:3.11-slim
 
-# 1. Install System Dependencies (Required for GDAL/GeoPandas)
-RUN apt-get update && apt-get install -y \
-    gdal-bin \
-    libgdal-dev \
-    g++ \
+# 1. Install System Dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libexpat1 \
+    libgomp1 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
