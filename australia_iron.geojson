@@ -1,0 +1,40 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Pilbara Iron Region (Australia)",
+        "source": "Maus et al. 2022 training data",
+        "category": "training_mine"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              118.55,
+              -22.55
+            ],
+            [
+              119.05,
+              -22.55
+            ],
+            [
+              119.05,
+              -22.05
+            ],
+            [
+              118.55,
+              -22.05
+            ],
+            [
+              118.55,
+              -22.55
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Antofagasta Copper Belt (Chile)",
+        "source": "Maus et al. 2022 training data",
+        "category": "training_mine"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -70.45,
+              -23.75
+            ],
+            [
+              -69.95,
+              -23.75
+            ],
+            [
+              -69.95,
+              -23.25
+            ],
+            [
+              -70.45,
+              -23.25
+            ],
+            [
+              -70.45,
+              -23.75
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}
