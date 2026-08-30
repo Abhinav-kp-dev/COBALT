@@ -1,5 +1,5 @@
 """
-MineGuard: Forensic PDF Report Generator
+COBALT: Forensic PDF Report Generator
 
 Generates a professional PDF report with timestamped evidence,
 metrics summaries, and site coordinates for official use.
@@ -11,8 +11,8 @@ import os
 import datetime
 
 
-class MineGuardReport(FPDF):
-    """Custom PDF class with MineGuard branding."""
+class CobaltReport(FPDF):
+    """Custom PDF class with COBALT branding."""
     
     def header(self):
         # Logo area
@@ -23,7 +23,7 @@ class MineGuardReport(FPDF):
         self.set_font("Helvetica", "B", 18)
         self.set_text_color(255, 255, 255)
         self.set_y(8)
-        self.cell(0, 10, "MineGuard.ai", ln=False, align="L")
+        self.cell(0, 10, "COBALT", ln=False, align="L")
         
         # Subtitle
         self.set_font("Helvetica", "", 9)
@@ -37,7 +37,7 @@ class MineGuardReport(FPDF):
         self.set_y(-20)
         self.set_font("Helvetica", "I", 8)
         self.set_text_color(128, 128, 128)
-        self.cell(0, 10, f"MineGuard.ai  |  Page {self.page_no()}/{{nb}}  |  CONFIDENTIAL", align="C")
+        self.cell(0, 10, f"COBALT  |  Page {self.page_no()}/{{nb}}  |  CONFIDENTIAL", align="C")
     
     def section_title(self, title):
         """Add a styled section header."""
@@ -86,7 +86,7 @@ def generate_pdf_report(report_data, output_path="output/report.pdf"):
     print("📄 Generating Forensic PDF Report...")
     
     try:
-        pdf = MineGuardReport()
+        pdf = CobaltReport()
         pdf.alias_nb_pages()
         pdf.set_auto_page_break(auto=True, margin=25)
         pdf.add_page()

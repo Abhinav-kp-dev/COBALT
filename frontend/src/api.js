@@ -1,6 +1,16 @@
 import axios from 'axios';
 
-const API_URL = "http://localhost:8001";
+export const API_URL = "http://localhost:8001";
+
+// --- Function 0: Service health ---
+// Used by the status indicator in the top bar and the Settings diagnostics
+// panel, so an unreachable backend is visible immediately rather than showing
+// up as an empty inspection list.
+export const fetchHealth = async () => {
+    const response = await fetch(`${API_URL}/`);
+    if (!response.ok) throw new Error(`Service unhealthy: ${response.status}`);
+    return response.json();
+};
 
 // --- Function 1: Upload File ---
 // Detection method is fixed to the threshold-based engine on the backend;

@@ -1,9 +1,9 @@
 """
-MineGuard Phase 2: 3D Forensics Surface Model
+COBALT Phase 2: 3D Forensics Surface Model
 
 Generates an interactive 3D forensic excavation model using Plotly.
 Renders excavation pit depth downwards (negative Z), with a calibrated white-to-crimson
-gradient, projected 2D floor contours, and dark forensic theme matching the MineGuard UI.
+gradient, projected 2D floor contours, and dark forensic theme matching the COBALT UI.
 """
 
 import os
@@ -19,7 +19,7 @@ def _generate_empty_model(output_path):
     html = """
     <!DOCTYPE html>
     <html>
-    <head><title>MineGuard 3D Model</title></head>
+    <head><title>COBALT 3D Model</title></head>
     <body style="background:#070a10; color:#f8fafc; display:flex; align-items:center; 
                  justify-content:center; height:100vh; margin:0; font-family:system-ui,-apple-system,sans-serif;">
         <div style="text-align:center;">
@@ -346,7 +346,7 @@ def _render_forensic_model(Z, xs, ys, output_path, volume=0.0, max_depth=0.0,
     fig.update_layout(
         title=dict(
             text=(
-                "<b>MineGuard 3D Forensics Model</b><br>"
+                "<b>COBALT 3D Forensics Model</b><br>"
                 f"<span style='font-size:12px;color:#f0a03e'>"
                 f"Volume: {volume:,.0f} m³ &nbsp;·&nbsp; Max Depth: {max_depth:.1f} m"
                 f" &nbsp;·&nbsp; Footprint: {pit_area_ha:,.1f} ha"

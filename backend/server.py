@@ -20,13 +20,13 @@ from database import get_db
 from models import Inspection
 
 # Initialize FastAPI app
-app = FastAPI(title="MineGuard Enterprise API")
+app = FastAPI(title="COBALT Mining Forensics API")
 
 # --- INITIALIZE EARTH ENGINE AT STARTUP ---
 @app.on_event("startup")
 async def startup_event():
     """Initialize Earth Engine when FastAPI starts"""
-    print("🚀 Starting MineGuard API...", flush=True)
+    print("🚀 Starting COBALT API...", flush=True)
     try:
         initialize_earth_engine()
         print("✅ Startup complete!", flush=True)
@@ -37,7 +37,7 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
-    print("🛑 Shutting down MineGuard API...", flush=True)
+    print("🛑 Shutting down COBALT API...", flush=True)
 
 # --- CONFIGURATION ---
 # Get public URL from environment or default to localhost
@@ -63,7 +63,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")
 def home():
-    return {"status": "MineGuard System v2.0 Online", "public_url": API_PUBLIC_URL}
+    return {"status": "COBALT System v2.0 Online", "public_url": API_PUBLIC_URL}
 
 @app.post("/api/analyze")
 async def analyze_mining_site(

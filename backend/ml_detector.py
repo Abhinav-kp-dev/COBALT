@@ -1,5 +1,5 @@
 """
-MineGuard: RandomForest pixel classifier.
+COBALT: RandomForest pixel classifier.
 
 An alternative to the threshold-based ("triple lock") detector in
 phase1_detection.py. Same inputs, same outputs: it consumes the Sentinel-2
