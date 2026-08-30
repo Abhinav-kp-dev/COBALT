@@ -19,6 +19,9 @@ from phase1_detection import run_unified_detection, initialize_earth_engine
 from database import get_db
 from models import Inspection
 
+# Platform assistant (Google AI Studio / Gemini)
+import chatbot
+
 # Initialize FastAPI app
 app = FastAPI(title="COBALT Mining Forensics API")
 
@@ -261,3 +264,38 @@ def delete_inspections(payload: DeleteRequest, db: Session = Depends(get_db)):
     deleted = [i for i, _ in job_ids]
     print(f"🗑️  Deleted {len(deleted)} inspection(s): {deleted}")
     return {"deleted": deleted, "count": len(deleted)}
+
+
+# --- PLATFORM ASSISTANT -----------------------------------------------------
+# The Gemini API key stays on this side of the wire. The browser calls
+# /api/chat; only this process ever sees GEMINI_API_KEY.
+
+
+@app.get("/api/chat/status")
+def chat_status():
+    """Lets the UI hide the assistant entirely when no key is configured."""
+    return {"enabled": chatbot.is_configured(), "model": chatbot.GEMINI_MODEL}
+
+
+@app.post("/api/chat")
+async def chat(payload: chatbot.ChatRequest, db: Session = Depends(get_db)):
+    """
+    Answer a question about the platform or the current inspection data.
+
+    The conversation is stateless: the client sends the transcript each time,
+    and the live data summary is rebuilt per request so the assistant always
+    reflects the current table rather than a snapshot from session start.
+    """
+    if not payload.messages:
+        raise HTTPException(status_code=400, detail="No message provided.")
+
+    try:
+        reply = await chatbot.ask(payload.messages, chatbot.build_live_context(db))
+    except RuntimeError as e:
+        # These carry user-safe text (missing key, bad model, rate limit).
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        print(f"❌ Assistant error: {e}")
+        raise HTTPException(status_code=500, detail="The assistant failed to respond.")
+
+    return {"reply": reply}

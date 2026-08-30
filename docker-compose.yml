@@ -37,6 +37,13 @@ services:
       # or every depth value at inference is smaller than the model expects.
       - MG_DEPTH_RADIUS=250
       
+      # --- PLATFORM ASSISTANT (Google AI Studio / Gemini) ---
+      # Read from the host environment or a .env file beside this compose file;
+      # never hardcoded here, since this file is committed. The assistant is
+      # simply hidden in the UI when the key is absent.
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+
       # --- CRITICAL CONFIGURATION ---
       # For Localhost (Development):
       - API_PUBLIC_URL=http://localhost:8001

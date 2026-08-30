@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SECTIONS, Sidebar } from "./components/Sidebar";
 import { Topbar } from "./components/Topbar";
+import { Assistant } from "./components/Assistant";
 import { Dashboard } from "./sections/Dashboard";
 import { NewAnalysis } from "./sections/NewAnalysis";
 import { History } from "./sections/History";
@@ -84,6 +85,9 @@ function Shell() {
           </div>
         </footer>
       </div>
+
+      {/* Renders nothing unless the backend has a Gemini key configured. */}
+      <Assistant />
     </div>
   );
 }

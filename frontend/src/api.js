@@ -53,3 +53,26 @@ export const deleteInspections = async (ids) => {
     if (!response.ok) throw new Error(`Failed to delete inspections: ${response.status}`);
     return response.json();
 };
+
+// --- Function 5: Platform assistant availability ---
+// The UI hides the assistant entirely when the backend has no Gemini key,
+// rather than offering a button that always errors.
+export const fetchChatStatus = async () => {
+    const response = await fetch(`${API_URL}/api/chat/status`);
+    if (!response.ok) throw new Error(`Status check failed: ${response.status}`);
+    return response.json();
+};
+
+// --- Function 6: Ask the platform assistant ---
+// Stateless: the whole transcript is sent each turn. The API key never leaves
+// the backend, so there is nothing sensitive in this request.
+export const sendChat = async (messages) => {
+    const response = await fetch(`${API_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data?.detail || `Assistant error: ${response.status}`);
+    return data.reply;
+};

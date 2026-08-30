@@ -1,4 +1,4 @@
-# Google Earth Engine Setup Guide (MineGuard)
+# Google Earth Engine Setup Guide (COBALT)
 
 This project needs Google Earth Engine access. The auth must be set up **once** before running `docker-compose up -d --build`.
 

@@ -8,7 +8,6 @@ imagery and elevation data — returning area, volume, depth and a signed
 forensic report.
 
 
-
 ---
 
 ## Contents
@@ -22,6 +21,7 @@ forensic report.
 - [Configuration](#configuration)
 - [API reference](#api-reference)
 - [Web application](#web-application)
+- [Platform assistant](#platform-assistant)
 - [Measurements and units](#measurements-and-units)
 - [Project structure](#project-structure)
 - [Limitations](#limitations)
@@ -304,6 +304,14 @@ curl -X POST http://localhost:8001/api/analyze \
 Returns `400` if no valid boundary can be read from the file — COBALT fails
 loudly rather than silently analysing a placeholder location.
 
+### `POST /api/chat`
+Ask the platform assistant. `{ "messages": [{ "role": "user", "content": "…" }] }`
+where `role` is `user` or `model`. Returns `{ "reply": "…" }`, or `503` with a
+readable reason when the assistant is unconfigured or upstream fails.
+
+### `GET /api/chat/status`
+Whether the assistant is available: `{ "enabled": bool, "model": str }`.
+
 ### `GET /api/history`
 All assessments, newest first.
 
@@ -341,6 +349,57 @@ themes**.
 
 ---
 
+## Platform assistant
+
+An optional in-app chatbot, backed by the **Google AI Studio (Gemini) API**,
+that answers two kinds of question:
+
+- **How the platform works** — methodology, units, thresholds, workflow.
+- **What your data currently says** — grounded in a live summary of the
+  inspection table, so *"how many sites are over threshold?"* is answered from
+  the database rather than guessed.
+
+### Enabling it
+
+1. Get a free key at <https://aistudio.google.com/apikey>
+2. ```bash
+   cp .env.example .env      # .env is gitignored
+   # then set GEMINI_API_KEY=... in it
+   docker compose up -d backend
+   ```
+
+Without a key the assistant is **hidden entirely** — the rest of COBALT is
+unaffected. `GET /api/chat/status` reports availability, and the UI only
+renders the launcher when it returns `enabled: true`.
+
+| Variable | Default | Description |
+|:--|:--|:--|
+| `GEMINI_API_KEY` | *(unset)* | AI Studio key. Assistant is hidden when absent |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Must be a model your key can access |
+
+### Design notes
+
+- **The key never reaches the browser.** The frontend calls `POST /api/chat`;
+  only the backend process holds `GEMINI_API_KEY`. A key embedded in React
+  source is public to anyone who opens devtools.
+- **Grounded, not freeform.** Each request carries a curated platform briefing
+  plus a live database summary. The model is instructed to answer only from
+  those and to say so when it cannot — it must not invent a figure, threshold
+  or filename.
+- **Rebuilt per request**, so the assistant reflects the current table rather
+  than a snapshot from session start.
+- **Bounded**: history is trimmed to the last 12 turns and each message capped
+  at 4,000 characters, so a runaway client cannot become an unbounded bill.
+- **Inspection data is treated as untrusted.** Lease filenames are user-supplied,
+  so the system prompt instructs the model to treat that block as data and never
+  follow instructions appearing inside it. The request schema also rejects any
+  role other than `user`/`model`, so a client cannot inject a forged `system`
+  turn.
+- **It will not give legal advice.** COBALT produces presumptive evidence; the
+  assistant is instructed to say so rather than assert that illegal mining
+  occurred.
+
+---
 ## Measurements and units
 
 Every figure is verified dimensionally consistent:
@@ -421,6 +480,7 @@ worse than none.
 | **Geospatial** | Google Earth Engine · geemap · Shapely · GeoPandas · rasterio |
 | **ML / numerics** | scikit-learn · NumPy · SciPy · pandas |
 | **Rendering** | Plotly (3D) · Folium (2D) · FPDF (reports) |
+| **Assistant** | Google AI Studio (Gemini) via server-side proxy |
 | **Infrastructure** | Docker Compose · Nginx |
 
 ### Data sources
