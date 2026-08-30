@@ -79,7 +79,7 @@ def load_model(path=None):
     return _model
 
 
-def build_feature_stack(s2_image, raw_depth, roi, dem=None):
+def build_feature_stack(s2_image, raw_depth, roi, dem=None, rule_mask=None):
     """
     Assemble the exact bands the model was trained on, plus the lease-boundary
     mask so the inside/outside split needs no second Earth Engine round-trip.
@@ -88,9 +88,13 @@ def build_feature_stack(s2_image, raw_depth, roi, dem=None):
         s2_image: median Sentinel-2 composite carrying B4/B3/B2/B8/B11
         raw_depth: single-band 'depth' image (smoothed surface minus DEM)
         roi: lease boundary geometry
+        rule_mask: optional boolean ee.Image (the threshold triple-lock mask)
+            fetched as an extra band so it lands on the exact same pixel grid
+            as the ML features -- this is what lets the two detectors be
+            combined pixel-for-pixel instead of just compared as summary stats.
 
     Returns:
-        ee.Image with bands MODEL_FEATURES + ['boundary']
+        ee.Image with bands MODEL_FEATURES + ['boundary'] (+ 'rule_mask' if given)
     """
     ndbi = s2_image.normalizedDifference(["B11", "B8"]).rename("ndbi")
     ndvi = s2_image.normalizedDifference(["B8", "B4"]).rename("ndvi")
@@ -110,6 +114,9 @@ def build_feature_stack(s2_image, raw_depth, roi, dem=None):
     if dem is not None:
         stack = stack.addBands(dem.rename("elevation"))
 
+    if rule_mask is not None:
+        stack = stack.addBands(rule_mask.rename("rule_mask"))
+
     return stack.toFloat()
 
 
@@ -118,7 +125,7 @@ def build_feature_stack(s2_image, raw_depth, roi, dem=None):
 MAX_PIXELS = int(os.getenv("MG_ML_MAX_PIXELS", 4_000_000))
 
 
-def fetch_array(image, region, scale=None):
+def fetch_array(image, region, scale=None, extra_bands=None):
     """
     Pull an ee.Image into a numpy structured array via computePixels.
 
@@ -126,9 +133,12 @@ def fetch_array(image, region, scale=None):
     be coarsened to fit the response limit, and the area/volume maths
     downstream must use the scale actually fetched; bounds is the
     (west, south, east, north) extent the raster covers, for map overlays.
+
+    extra_bands: additional band names present on `image` to fetch alongside
+    the model features (e.g. "rule_mask" for the ensemble path).
     """
     scale = scale or ML_SCALE
-    band_names = MODEL_FEATURES + ["boundary", "elevation"]
+    band_names = MODEL_FEATURES + ["boundary", "elevation"] + list(extra_bands or [])
 
     coords = region.bounds().coordinates().getInfo()[0]
     xs = [c[0] for c in coords]
@@ -266,6 +276,50 @@ def run_ml_detection(s2_image, raw_depth, roi, search_zone, scale=None, dem=None
                      "elevation": elevation}
 
 
+def run_ensemble_detection(s2_image, raw_depth, roi, search_zone, rule_mask,
+                            scale=None, dem=None):
+    """
+    Run the RandomForest classifier and the threshold triple-lock together on
+    the exact same pixel grid, and combine them into one detection instead of
+    presenting two competing results:
+
+      - "combined" mask (what gets reported): a pixel counts as mining if
+        EITHER method flags it -- a miss by one method doesn't hide a real
+        site the other one caught.
+      - "confirmed" mask (both agree): the subset the two independent methods
+        agree on, reported as a cross-validation confidence percentage rather
+        than a second number the user has to reconcile.
+
+    `rule_mask` must be the same boolean ee.Image (the threshold triple-lock
+    mask) the rule pipeline already computed, fetched here as an extra band so
+    it lands on the identical grid as the ML features -- no separate
+    reduceRegion, no alignment guesswork.
+    """
+    stack = build_feature_stack(s2_image, raw_depth, roi, dem=dem, rule_mask=rule_mask)
+    arr, scale_used, bounds = fetch_array(
+        stack, search_zone, scale or ML_SCALE, extra_bands=["rule_mask"]
+    )
+    ml_mask, depth, boundary, prob, elevation = predict_mask(arr)
+    rule_mask_arr = np.asarray(arr["rule_mask"], dtype=np.float64) > 0.5
+
+    combined_mask = ml_mask | rule_mask_arr
+    confirmed_mask = ml_mask & rule_mask_arr
+
+    metrics = metrics_from_arrays(combined_mask, depth, boundary, scale_used)
+    combined_count = int(combined_mask.sum())
+    agreement_pct = (float(confirmed_mask.sum()) / combined_count * 100.0) if combined_count else 0.0
+    print(f"   🤝 Cross-validation agreement: {agreement_pct:.1f}% "
+          f"({int(confirmed_mask.sum()):,} confirmed / {combined_count:,} flagged px)")
+
+    return metrics, {
+        "mask": combined_mask, "confirmed_mask": confirmed_mask,
+        "ml_mask": ml_mask, "rule_mask": rule_mask_arr,
+        "depth": depth, "boundary": boundary, "prob": prob, "bounds": bounds,
+        "scale": scale_used, "elevation": elevation,
+        "agreement_pct": agreement_pct,
+    }
+
+
 # --- MAP RENDERING -------------------------------------------------------
 # The classifier's verdict lives in a numpy array, not in Earth Engine, so it
 # cannot be drawn with Map.addLayer like the rule masks. Instead the mask is
@@ -300,14 +354,14 @@ def mask_to_png_datauri(mask, boundary):
     return f"data:image/png;base64,{encoded}"
 
 
-def build_ml_map(s2_image, lease_geojson, arrays, output_path):
+def build_detection_map(s2_image, lease_geojson, arrays, output_path):
     """
-    Build the 2D map for the ML detector.
+    Build the 2D map for the (ML + threshold) ensemble detection.
 
     Deliberately does not reuse the geemap path: those layers render the
-    rule-based masks, which would contradict the metrics this detector
-    produced -- on a clean site the map would show red while the report says
-    nothing was found.
+    rule-only masks, which would contradict the combined metrics this
+    pipeline produced -- on a clean site the map would show red while the
+    report says nothing was found.
     """
     import folium
 
@@ -337,10 +391,25 @@ def build_ml_map(s2_image, lease_geojson, arrays, output_path):
         image=mask_to_png_datauri(arrays["mask"], arrays["boundary"]),
         bounds=[[south, west], [north, east]],
         opacity=0.75,
-        name="Detections (RandomForest)",
+        name="Detections (Threshold + ML)",
         interactive=False,
         zindex=2,
     ).add_to(fmap)
+
+    # The subset both independent detectors agree on -- toggle this layer on
+    # to see the high-confidence core of the detection above, as visual proof
+    # the two methods are corroborating rather than contradicting each other.
+    confirmed = arrays.get("confirmed_mask")
+    if confirmed is not None and confirmed.any():
+        folium.raster_layers.ImageOverlay(
+            image=mask_to_png_datauri(confirmed, arrays["boundary"]),
+            bounds=[[south, west], [north, east]],
+            opacity=0.9,
+            name=f"Confirmed by Both Methods ({arrays.get('agreement_pct', 0):.0f}% agreement)",
+            interactive=False,
+            show=False,
+            zindex=3,
+        ).add_to(fmap)
 
     folium.GeoJson(
         lease_geojson,

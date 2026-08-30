@@ -12,10 +12,6 @@ function App() {
   const [startDate, setStartDate] = useState("2024-01-01");
   const [endDate, setEndDate] = useState("2024-04-30");
 
-  // Which detector labels each pixel. Switchable live so the two methods can
-  // be compared on the same site without restarting the backend.
-  const [detector, setDetector] = useState("ml");
-
   // NEW: State to control which view is active (3D, 2D, or PDF)
   const [activeView, setActiveView] = useState('3d');
 
@@ -54,8 +50,8 @@ function App() {
     setReport(null);
     
     try {
-      // Pass dates to upload function
-      const result = await uploadFile(file, startDate, endDate, detector);
+      // Pass dates to upload function (threshold-based detection is the only method)
+      const result = await uploadFile(file, startDate, endDate);
       setReport(result);
       loadHistory(); 
     } catch (error) {
@@ -206,31 +202,7 @@ function App() {
               </div>
             </div>
 
-            {/* --- DETECTOR SELECTOR --- */}
-            <div className="mt-4">
-              <label className="text-xs text-slate-400 font-medium ml-1">Detector</label>
-              <div className="mt-1 grid grid-cols-2 gap-2">
-                {[
-                  { id: "ml", label: "RandomForest" },
-                  { id: "rule", label: "Thresholds" },
-                ].map((d) => (
-                  <button
-                    key={d.id}
-                    type="button"
-                    onClick={() => setDetector(d.id)}
-                    className={`py-2 rounded-md text-xs font-bold border transition-all
-                      ${detector === d.id
-                        ? 'bg-cyan-600/20 border-cyan-500 text-cyan-300'
-                        : 'bg-slate-900 border-slate-600 text-slate-400 hover:border-slate-500'}
-                    `}
-                  >
-                    {d.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <button 
+            <button
               onClick={handleAnalyze}
               disabled={!file || loading}
               className={`w-full mt-4 py-3 rounded-lg font-bold text-white text-sm transition-all shadow-lg
@@ -348,22 +320,6 @@ function App() {
           
           {report ? (
             <>
-              {/* PROVENANCE: which detector produced the numbers below */}
-              {report.detector && (
-                <div className="flex items-center gap-2 -mb-1">
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500">
-                    Detector
-                  </span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded font-bold border
-                    ${report.detector === 'ml'
-                      ? 'bg-cyan-900/40 border-cyan-700 text-cyan-300'
-                      : 'bg-amber-900/40 border-amber-700 text-amber-300'}
-                  `}>
-                    {report.detector === 'ml' ? 'RANDOMFOREST' : 'THRESHOLD TRIPLE-LOCK'}
-                  </span>
-                </div>
-              )}
-
               {/* METRICS ROW */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[

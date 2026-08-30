@@ -67,11 +67,10 @@ def home():
 
 @app.post("/api/analyze")
 async def analyze_mining_site(
-    file: UploadFile = File(...), 
+    file: UploadFile = File(...),
     db: Session = Depends(get_db),
     start_date: str = Form("2024-01-01"),
     end_date: str = Form("2024-04-30"),
-    detector: str = Form(None)
 ):
     """
     Analyzes the file AND saves the result to the PostgreSQL Database.
@@ -117,13 +116,15 @@ async def analyze_mining_site(
     try:
         job_output_dir = os.path.join(OUTPUT_DIR, job_id)
         
+        # No client-selectable detector: run_unified_detection always combines
+        # the threshold and ML engines (falling back to threshold-only itself
+        # if the ML model can't be loaded).
         result = run_unified_detection(
-            lease_geojson, 
+            lease_geojson,
             filename=user_filename,
             output_dir=job_output_dir,
             start_date=start_date,
             end_date=end_date,
-            detector=detector
         )
         
         metrics = result["metrics"]

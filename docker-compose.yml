@@ -28,9 +28,10 @@ services:
       - GOOGLE_APPLICATION_CREDENTIALS=/app/gee-key.json
 
       # --- DETECTION TUNING ---
-      # Demo defaults. MG_DETECTOR is only the fallback: the UI sends a
-      # per-request detector, so it can be switched without a restart.
-      - MG_DETECTOR=ml
+      # Demo defaults. Detection always runs the threshold engine + RandomForest
+      # together; MG_DETECTOR is only an escape hatch (set to "rule" to force
+      # threshold-only, e.g. if the ML model file is unavailable).
+      - MG_DETECTOR=ensemble
       - MG_ML_THRESHOLD=0.99
       # Must match the focal radius the classifier was trained with (250 m),
       # or every depth value at inference is smaller than the model expects.

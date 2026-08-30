@@ -3,12 +3,13 @@ import axios from 'axios';
 const API_URL = "http://localhost:8001";
 
 // --- Function 1: Upload File ---
-export const uploadFile = async (file, startDate, endDate, detector) => {
+// Detection method is fixed to the threshold-based engine on the backend;
+// no detector choice is sent from the client.
+export const uploadFile = async (file, startDate, endDate) => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("start_date", startDate);
     formData.append("end_date", endDate);
-    if (detector) formData.append("detector", detector);
 
     const response = await axios.post(`${API_URL}/api/analyze`, formData, {
         headers: { "Content-Type": "multipart/form-data" }

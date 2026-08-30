@@ -51,10 +51,11 @@ DEPTH_RADIUS_M = _envf("MG_DEPTH_RADIUS", 150)
 # Majority filter radius that despeckles the fused mask.
 CLEANUP_RADIUS_M = _envf("MG_CLEANUP_RADIUS", 30)
 
-# Which detector labels a pixel: "rule" = the three thresholds above,
-# "ml" = the RandomForest in ml_detector.py. Rule stays the default because
-# it is the path validated against all three benchmark sites.
-DETECTOR = os.getenv("MG_DETECTOR", "rule").strip().lower()
+# Detection always runs both engines and combines them (see run_unified_detection):
+# the threshold triple-lock below, and the RandomForest in ml_detector.py.
+# MG_DETECTOR is kept only as an escape hatch -- set to "rule" to fall back to
+# threshold-only if the ML model can't be loaded in a given environment.
+DETECTOR = os.getenv("MG_DETECTOR", "ensemble").strip().lower()
 
 DEM_SOURCE = 'COPERNICUS/DEM/GLO30_2024_1'
 
@@ -160,13 +161,11 @@ def run_unified_detection(lease_geojson=None, filename="Manual_Input", output_di
             initialize_earth_engine()
         except Exception as e:
             raise Exception(f"Cannot run detection: Earth Engine initialization failed - {e}")
-    
-    # Per-request override so the UI can switch detectors live; falls back to
-    # the MG_DETECTOR environment default.
-    detector = (detector or DETECTOR or "rule").strip().lower()
-    if detector not in ("rule", "ml"):
-        print(f"⚠️  Unknown detector '{detector}', falling back to 'rule'")
-        detector = "rule"
+
+    # No per-request choice any more: detection always runs both engines and
+    # combines them. `detector`/MG_DETECTOR only matter as a fallback to
+    # threshold-only if the ML model can't be loaded (see the try/except below).
+    use_ml = (detector or DETECTOR or "ensemble").strip().lower() != "rule"
 
     os.makedirs(output_dir, exist_ok=True)
     lid_elevation = 0.0
@@ -240,37 +239,50 @@ def run_unified_detection(lease_geojson=None, filename="Manual_Input", output_di
 # 🔴 ILLEGAL: Outside Boundary + Triple Lock
     illegal_mining = mining_base.And(boundary_mask.eq(0))
 
-    # --- D. QUANTIFICATION (UNCHANGED) ---
+    # --- D. QUANTIFICATION ---
     print("📊 Calculating Metrics...")
-    
+
     def get_metrics(mask, name):
         # Calculate Area
         area = mask.multiply(ee.Image.pixelArea()).reduceRegion(
             reducer=ee.Reducer.sum(), geometry=search_zone, scale=10, maxPixels=1e9
         ).values().get(0).getInfo() or 0.0
-        
+
         # Calculate Volume (Area * Depth at that pixel)
         vol_layer = raw_depth.updateMask(mask)
         vol = vol_layer.multiply(ee.Image.pixelArea()).reduceRegion(
             reducer=ee.Reducer.sum(), geometry=search_zone, scale=30, maxPixels=1e9
         ).values().get(0).getInfo() or 0.0
-        
+
         return area, vol
 
-    ml_arrays = None
-    if detector == "ml":
-        # The model replaces only the pixel labelling; the legal/illegal split,
-        # volume maths and every artifact below are shared with the rule path.
-        print("🧠 Detector: RandomForest")
-        from ml_detector import run_ml_detection
-        ml_metrics, ml_arrays = run_ml_detection(
-            s2_image, raw_depth, roi, search_zone, dem=dem
-        )
-        legal_area_m2 = ml_metrics["legal_area_m2"]
-        legal_vol_m3 = ml_metrics["legal_vol_m3"]
-        illegal_area_m2 = ml_metrics["illegal_area_m2"]
-        illegal_vol_m3 = ml_metrics["illegal_vol_m3"]
-    else:
+    # Detection always tries to combine both engines: a pixel is reported as
+    # mining if EITHER the threshold triple-lock or the RandomForest flags it
+    # (so a miss by one doesn't hide a real site the other caught), and the
+    # subset both agree on is surfaced separately as a cross-validation
+    # confidence percentage rather than a second, conflicting result.
+    # If the ML model can't be loaded (missing file/deps, or MG_DETECTOR=rule
+    # forcing it off), this falls back to the threshold-only path so the
+    # pipeline still returns a result instead of failing the whole request.
+    ensemble_arrays = None
+    used_ml = False
+    if use_ml:
+        try:
+            print("🧠 Detector: Threshold + RandomForest (ensemble)")
+            from ml_detector import run_ensemble_detection
+            ens_metrics, ensemble_arrays = run_ensemble_detection(
+                s2_image, raw_depth, roi, search_zone, rule_mask=triple_lock_mask, dem=dem
+            )
+            legal_area_m2 = ens_metrics["legal_area_m2"]
+            legal_vol_m3 = ens_metrics["legal_vol_m3"]
+            illegal_area_m2 = ens_metrics["illegal_area_m2"]
+            illegal_vol_m3 = ens_metrics["illegal_vol_m3"]
+            used_ml = True
+        except Exception as e:
+            print(f"⚠️  ML detector unavailable ({e}); falling back to threshold-only")
+            ensemble_arrays = None
+
+    if not used_ml:
         print("📐 Detector: threshold triple-lock")
         legal_area_m2, legal_vol_m3 = get_metrics(legal_mining, "Legal")
         illegal_area_m2, illegal_vol_m3 = get_metrics(illegal_mining, "Illegal")
@@ -302,12 +314,12 @@ def run_unified_detection(lease_geojson=None, filename="Manual_Input", output_di
     map_filename = "map_2d.html"
     map_path = os.path.join(output_dir, map_filename)
 
-    if detector == "ml" and ml_arrays is not None:
-        # The geemap layers below draw the rule masks, which would contradict
-        # the metrics the classifier just produced -- on a clean site the map
-        # would show red while the report says nothing was found.
-        from ml_detector import build_ml_map
-        build_ml_map(s2_image, lease_geojson, ml_arrays, map_path)
+    if used_ml and ensemble_arrays is not None:
+        # The geemap layers below draw the rule-only masks, which would
+        # contradict the combined metrics just computed -- on a clean site
+        # the map would show red while the report says nothing was found.
+        from ml_detector import build_detection_map
+        build_detection_map(s2_image, lease_geojson, ensemble_arrays, map_path)
     else:
         Map = geemap.Map()
         Map.centerObject(roi, 14)
@@ -327,14 +339,14 @@ def run_unified_detection(lease_geojson=None, filename="Manual_Input", output_di
     # 2. 3D TIN
     tin_filename = "model_3d.html"
     tin_full_path = os.path.join(output_dir, tin_filename)
-    if detector == "ml" and ml_arrays is not None:
+    if used_ml and ensemble_arrays is not None:
         # Build from the same raster the metrics came from, so the 3D model
         # cannot disagree with the numbers beside it.
         from phase2_tin_viz import generate_tin_from_arrays
         generate_tin_from_arrays(
-            ml_arrays["mask"], ml_arrays["depth"], ml_arrays["boundary"],
-            ml_arrays["bounds"], output_path=tin_full_path,
-            elevation=ml_arrays.get("elevation"),
+            ensemble_arrays["mask"], ensemble_arrays["depth"], ensemble_arrays["boundary"],
+            ensemble_arrays["bounds"], output_path=tin_full_path,
+            elevation=ensemble_arrays.get("elevation"),
             volume=total_vol_m3,
             # The renderer derives the true peak depth from the surface itself;
             # passing the average here mislabelled every model.
@@ -360,7 +372,9 @@ def run_unified_detection(lease_geojson=None, filename="Manual_Input", output_di
             "avg_depth": avg_depth_m, 
             "volume": illegal_vol_m3, 
             "total_volume": total_vol_m3,
-            "trucks": int(illegal_vol_m3 / 15) if illegal_vol_m3 else 0
+            "trucks": int(illegal_vol_m3 / 15) if illegal_vol_m3 else 0,
+            "agreement_pct": (round(ensemble_arrays.get("agreement_pct", 0.0), 1)
+                               if used_ml and ensemble_arrays is not None else None)
         }
         try:
             generate_pdf_report(report_data, output_path=os.path.join(output_dir, pdf_filename))
@@ -368,17 +382,23 @@ def run_unified_detection(lease_geojson=None, filename="Manual_Input", output_di
             print(f"PDF Error: {e}")
 
     # --- G. RETURN METRICS ---
+    metrics = {
+        "illegal_area_m2": round(illegal_area_m2, 2),
+        "legal_area_m2": round(legal_area_m2, 2),
+        "volume_m3": round(illegal_vol_m3, 2),
+        "total_vol_m3": round(total_vol_m3, 2),
+        "avg_depth_m": round(avg_depth_m, 2),
+        "truckloads": int(illegal_vol_m3 / 15)
+    }
+    if used_ml and ensemble_arrays is not None:
+        # How much of the reported area both independent methods agree on --
+        # the cross-validation confidence behind the single number above.
+        metrics["agreement_pct"] = round(ensemble_arrays.get("agreement_pct", 0.0), 1)
+
     return {
         "status": "success",
-        "detector": detector,
-        "metrics": {
-            "illegal_area_m2": round(illegal_area_m2, 2),
-            "legal_area_m2": round(legal_area_m2, 2),
-            "volume_m3": round(illegal_vol_m3, 2),
-            "total_vol_m3": round(total_vol_m3, 2),
-            "avg_depth_m": round(avg_depth_m, 2),
-            "truckloads": int(illegal_vol_m3 / 15)
-        },
+        "detector": "ensemble" if used_ml else "rule",
+        "metrics": metrics,
         "artifacts": {
             "map_url": map_filename,
             "model_url": tin_filename if total_area_m2 > 0 else None,

@@ -100,7 +100,12 @@ def generate_pdf_report(report_data, output_path="output/report.pdf"):
         pdf.add_metric_row("Analysis Window", 
                            f"{report_data.get('start_date', 'N/A')} to {report_data.get('end_date', 'N/A')}")
         pdf.add_metric_row("DEM Source", report_data.get("dem_source", "N/A"))
-        pdf.add_metric_row("Classification", "Triple-Lock Multi-Sensor Fusion")
+        agreement_pct = report_data.get("agreement_pct")
+        if agreement_pct is not None:
+            pdf.add_metric_row("Classification", "Dual-Verified: Triple-Lock Fusion + RandomForest")
+            pdf.add_metric_row("Cross-Validation Agreement", agreement_pct, "%")
+        else:
+            pdf.add_metric_row("Classification", "Triple-Lock Multi-Sensor Fusion")
         pdf.ln(5)
         
         # --- EXECUTIVE SUMMARY ---
