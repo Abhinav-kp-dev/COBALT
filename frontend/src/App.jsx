@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Upload, FileText, Map as MapIcon, Box, Activity, CheckCircle, AlertTriangle, Layers, FileOutput, Globe } from 'lucide-react';
-import { uploadFile, fetchHistory } from './api';
+import { Upload, FileText, Map as MapIcon, Box, Activity, CheckCircle, AlertTriangle, Layers, FileOutput, Globe, Trash2, CheckSquare, Square, X } from 'lucide-react';
+import { uploadFile, fetchHistory, deleteInspection, deleteInspections } from './api';
 
 function App() {
   const [file, setFile] = useState(null);
@@ -17,7 +17,13 @@ function App() {
   const [detector, setDetector] = useState("ml");
 
   // NEW: State to control which view is active (3D, 2D, or PDF)
-  const [activeView, setActiveView] = useState('3d'); 
+  const [activeView, setActiveView] = useState('3d');
+
+  // Inspection log selection. selectMode swaps the list into a checkbox list so
+  // several runs can be cleared at once; selectedIds holds the ticked rows.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     loadHistory();
@@ -27,8 +33,11 @@ function App() {
     try {
       const data = await fetchHistory();
       // Automatically select the most recent report if available
-      if (data && data.length > 0) {
+      if (data) {
         setHistory(data);
+        // Drop any ticked ids that no longer exist, so the delete button
+        // cannot fire against rows that are already gone.
+        setSelectedIds((prev) => prev.filter((id) => data.some((d) => d.id === id)));
       }
     } catch (error) {
       console.error("Failed to load history", error);
@@ -53,6 +62,63 @@ function App() {
       alert("Analysis Failed: " + error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleSelectMode = () => {
+    setSelectMode((on) => !on);
+    setSelectedIds([]);
+  };
+
+  const toggleSelected = (id) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const allSelected = history.length > 0 && selectedIds.length === history.length;
+
+  const toggleSelectAll = () => {
+    setSelectedIds(allSelected ? [] : history.map((h) => h.id));
+  };
+
+  // If the currently open report was one of the deleted rows, clear the viewer
+  // rather than leaving it pointing at artifacts the backend just removed.
+  const clearReportIfDeleted = (deletedJobIds) => {
+    if (report && deletedJobIds.includes(report.job_id)) setReport(null);
+  };
+
+  const handleDeleteOne = async (item, e) => {
+    e.stopPropagation();
+    if (!window.confirm(`Delete the inspection for "${item.filename}"? This also removes its report, map and 3D model.`)) return;
+    setDeleting(true);
+    try {
+      await deleteInspection(item.id);
+      clearReportIfDeleted([item.job_id]);
+      await loadHistory();
+    } catch (error) {
+      alert("Delete failed: " + (error?.response?.data?.detail || error.message));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.length === 0) return;
+    const n = selectedIds.length;
+    if (!window.confirm(`Delete ${n} inspection${n > 1 ? "s" : ""}? This also removes their reports, maps and 3D models.`)) return;
+    const jobIds = history.filter((h) => selectedIds.includes(h.id)).map((h) => h.job_id);
+    setDeleting(true);
+    try {
+      await deleteInspections(selectedIds);
+      clearReportIfDeleted(jobIds);
+      setSelectedIds([]);
+      setSelectMode(false);
+      await loadHistory();
+    } catch (error) {
+      alert("Delete failed: " + (error?.response?.data?.detail || error.message));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -181,23 +247,72 @@ function App() {
 
           {/* HISTORY LIST */}
           <div className="bg-slate-800/50 p-5 rounded-xl border border-slate-700 h-[600px] overflow-hidden flex flex-col">
-            <h3 className="text-sm font-bold text-slate-300 mb-3 flex items-center gap-2 uppercase tracking-wide">
-              <Layers size={16} className="text-purple-400"/> Inspection Log
-            </h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2 uppercase tracking-wide">
+                <Layers size={16} className="text-purple-400"/> Inspection Log
+              </h3>
+              {history.length > 0 && (
+                <button
+                  onClick={toggleSelectMode}
+                  className={`text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded border transition-colors
+                    ${selectMode
+                      ? 'border-slate-600 text-slate-300 hover:bg-slate-700/50'
+                      : 'border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500'}`}
+                  title={selectMode ? "Leave selection mode" : "Select entries to delete"}
+                >
+                  {selectMode ? <span className="flex items-center gap-1"><X size={11}/> Cancel</span> : "Select"}
+                </button>
+              )}
+            </div>
+
+            {/* SELECTION ACTION BAR */}
+            {selectMode && (
+              <div className="flex items-center justify-between gap-2 mb-3 px-2 py-2 rounded-lg bg-slate-900/70 border border-slate-700">
+                <button
+                  onClick={toggleSelectAll}
+                  className="text-[11px] text-slate-300 hover:text-cyan-300 flex items-center gap-1.5"
+                >
+                  {allSelected ? <CheckSquare size={13} className="text-cyan-400"/> : <Square size={13}/>}
+                  {allSelected ? "Clear all" : "Select all"}
+                </button>
+                <span className="text-[10px] text-slate-500">{selectedIds.length} selected</span>
+                <button
+                  onClick={handleDeleteSelected}
+                  disabled={selectedIds.length === 0 || deleting}
+                  className="text-[11px] font-bold px-2.5 py-1 rounded flex items-center gap-1.5 transition-colors
+                    bg-red-900/40 text-red-300 border border-red-800/70 hover:bg-red-800/60
+                    disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-red-900/40"
+                >
+                  <Trash2 size={12}/> {deleting ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            )}
             <div className="overflow-y-auto pr-2 space-y-2 flex-1 custom-scrollbar">
-              {history.map((item) => (
+              {history.length === 0 && (
+                <p className="text-xs text-slate-500 italic px-1">No inspections yet.</p>
+              )}
+              {history.map((item) => {
+                const isChecked = selectedIds.includes(item.id);
+                return (
                 <div 
                   key={item.id} 
-                  onClick={() => loadFromHistory(item)}
-                  className={`p-3 rounded-lg border cursor-pointer transition-all hover:translate-x-1
-                    ${report && report.job_id === item.job_id 
-                      ? 'bg-blue-900/30 border-blue-500/50' 
-                      : 'bg-slate-900/50 border-slate-700 hover:border-slate-600'}
+                  onClick={() => (selectMode ? toggleSelected(item.id) : loadFromHistory(item))}
+                  className={`group relative p-3 rounded-lg border cursor-pointer transition-all hover:translate-x-1
+                    ${selectMode && isChecked
+                      ? 'bg-red-900/20 border-red-500/50'
+                      : report && report.job_id === item.job_id 
+                        ? 'bg-blue-900/30 border-blue-500/50' 
+                        : 'bg-slate-900/50 border-slate-700 hover:border-slate-600'}
                   `}
                 >
                   <div className="flex justify-between items-start mb-1">
-                    <h4 className="font-medium text-xs text-slate-200 truncate w-32" title={item.filename}>
-                      {item.filename}
+                    <h4 className="font-medium text-xs text-slate-200 truncate flex items-center gap-2 w-32" title={item.filename}>
+                      {selectMode && (
+                        isChecked
+                          ? <CheckSquare size={13} className="text-red-400 shrink-0"/>
+                          : <Square size={13} className="text-slate-500 shrink-0"/>
+                      )}
+                      <span className="truncate">{item.filename}</span>
                     </h4>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold
                       ${item.illegal_area_m2 > 0 ? "bg-red-900/50 text-red-400" : "bg-green-900/50 text-green-400"}
@@ -205,12 +320,25 @@ function App() {
                       {item.illegal_area_m2 > 0 ? "REVIEW" : "CLEAR"}
                     </span>
                   </div>
-                  <div className="text-[10px] text-slate-500 flex justify-between">
+                  <div className="text-[10px] text-slate-500 flex justify-between items-center">
                     <span>{new Date(item.created_at).toLocaleDateString()}</span>
-                    <span>Vol: {item.volume_m3 ? Math.round(item.volume_m3).toLocaleString() : 0} m³</span>
+                    <span className="flex items-center gap-2">
+                      <span>Vol: {item.volume_m3 ? Math.round(item.volume_m3).toLocaleString() : 0} m³</span>
+                      {!selectMode && (
+                        <button
+                          onClick={(e) => handleDeleteOne(item, e)}
+                          disabled={deleting}
+                          title="Delete this inspection"
+                          className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-slate-500 hover:text-red-400 transition-opacity disabled:opacity-30"
+                        >
+                          <Trash2 size={12}/>
+                        </button>
+                      )}
+                    </span>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>

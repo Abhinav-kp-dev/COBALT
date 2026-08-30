@@ -1,9 +1,12 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Form
+from pydantic import BaseModel
+from typing import List
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import shutil
 import os
+import glob
 import uuid
 import shapely.geometry
 from geoalchemy2.shape import from_shape
@@ -196,3 +199,64 @@ def get_history(db: Session = Depends(get_db)):
         }
         for r in rows
     ]
+
+
+# --- INSPECTION LOG MANAGEMENT ---
+
+class DeleteRequest(BaseModel):
+    """Body for the bulk delete endpoint."""
+    ids: List[int]
+
+
+def _purge_job_artifacts(job_id: str) -> None:
+    """
+    Remove the rendered artifacts for one job.
+
+    The DB row is the only index into these files, so deleting the row without
+    this leaves orphaned report/map/model HTML on disk forever.
+    """
+    if not job_id:
+        return
+    out_dir = os.path.join(OUTPUT_DIR, job_id)
+    if os.path.isdir(out_dir):
+        shutil.rmtree(out_dir, ignore_errors=True)
+    for upload in glob.glob(os.path.join(UPLOAD_DIR, f"{job_id}_*")):
+        try:
+            os.remove(upload)
+        except OSError:
+            pass
+
+
+@app.delete("/api/inspections/{inspection_id}")
+def delete_inspection(inspection_id: int, db: Session = Depends(get_db)):
+    """Delete a single inspection and its artifacts."""
+    row = db.query(Inspection).filter(Inspection.id == inspection_id).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Inspection not found")
+
+    job_id = row.job_id
+    db.delete(row)
+    db.commit()
+    _purge_job_artifacts(job_id)
+    print(f"🗑️  Deleted inspection {inspection_id} ({job_id})")
+    return {"deleted": [inspection_id], "count": 1}
+
+
+@app.post("/api/inspections/delete")
+def delete_inspections(payload: DeleteRequest, db: Session = Depends(get_db)):
+    """Delete several inspections in one call, for multi-select in the UI."""
+    if not payload.ids:
+        return {"deleted": [], "count": 0}
+
+    rows = db.query(Inspection).filter(Inspection.id.in_(payload.ids)).all()
+    job_ids = [(r.id, r.job_id) for r in rows]
+    for r in rows:
+        db.delete(r)
+    db.commit()
+
+    for _, job_id in job_ids:
+        _purge_job_artifacts(job_id)
+
+    deleted = [i for i, _ in job_ids]
+    print(f"🗑️  Deleted {len(deleted)} inspection(s): {deleted}")
+    return {"deleted": deleted, "count": len(deleted)}

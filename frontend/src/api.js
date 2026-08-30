@@ -18,6 +18,27 @@ export const uploadFile = async (file, startDate, endDate, detector) => {
 
 // --- Function 2: Get History ---
 export const fetchHistory = async () => {
-    const response = await axios.get(`${API_URL}/api/history`);
-    return response.data;
+    const response = await fetch(`${API_URL}/api/history`);
+    if (!response.ok) throw new Error(`Failed to fetch history: ${response.status}`);
+    return response.json();
+};
+// --- Function 3: Delete a single inspection ---
+export const deleteInspection = async (id) => {
+    const response = await fetch(`${API_URL}/api/inspections/${id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+    });
+    if (!response.ok) throw new Error(`Failed to delete inspection: ${response.status}`);
+    return response.json();
+};
+
+// --- Function 4: Delete several inspections at once ---
+export const deleteInspections = async (ids) => {
+    const response = await fetch(`${API_URL}/api/inspections/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids })
+    });
+    if (!response.ok) throw new Error(`Failed to delete inspections: ${response.status}`);
+    return response.json();
 };
